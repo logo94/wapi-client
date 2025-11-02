@@ -9,7 +9,7 @@ WapiClient is designed to simplify interactions with Wikidata and any custom Wik
 For scripts running client-side in web pages is available a CDN to include
 
 ```
-import { WapiClient } from 'https://cdn.jsdelivr.net/gh/logo94/wapi-client@main/index.js';
+import { WapiClient } from 'https://cdn.jsdelivr.net/gh/logo94/wapi-client@main/WapiClient.js';
 ```
 
 ### For Browser Extension
