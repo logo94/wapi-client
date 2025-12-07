@@ -1,4 +1,4 @@
-export class WapiClient {
+class WapiClient {
     
     static API_PATH = '/w/api.php';
     wapiPort = null;
@@ -600,4 +600,15 @@ export class WapiClient {
         }
     }
     
+}
+
+export { WapiClient };
+
+if (typeof window !== 'undefined') {
+    window.WapiClient = WapiClient;
+}
+
+// CommonJS (Node.js)
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { WapiClient };
 }
