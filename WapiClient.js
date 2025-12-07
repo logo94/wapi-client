@@ -1,5 +1,4 @@
-
-class WapiClient {
+export class WapiClient {
     
     static API_PATH = '/w/api.php';
     wapiPort = null;
