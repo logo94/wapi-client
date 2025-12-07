@@ -22,9 +22,23 @@ class WapiClient {
         this.token = null;
         this.wapiPort = port;
 
-        this.isPopup = typeof chrome !== 'undefined' && chrome.extension && window.location.protocol === 'chrome-extension:';
+        this.isPopup = this.isPopup = this.#detectChromeExtensionContext();;
 
     }
+
+    #detectChromeExtensionContext() {
+    try {
+        if (typeof chrome === 'undefined') return false;
+        if (!chrome.runtime) return false;
+        if (!chrome.runtime.id) return false;
+        if (window.location.protocol !== 'chrome-extension:') return false;
+        return true;
+        
+    } catch (error) {
+        console.warn("Errore nel rilevamento contesto:", error);
+        return false;
+    }
+}
 
     /**
      * @private
@@ -117,7 +131,6 @@ class WapiClient {
     async #query(params) {
 
         const defaultParams = {
-            origin: '*',
             format: 'json',
             formatversion: 2,
             ...params
@@ -189,8 +202,7 @@ class WapiClient {
             {'Content-Type': 'application/x-www-form-urlencoded'},
             new URLSearchParams(defaultParams).toString()
         )
-        const data = await response.json()
-        return data;
+        return await response.json();
     }
 
     // USER INFO
@@ -199,15 +211,13 @@ class WapiClient {
      * Get CSRF token from browser for editing.
      * @returns {Promise<string>} Token CSRF
      */
-    async getAuthToken() {
+    async getCsrfToken() {
         const params = {
             action: "query",
-            meta: "tokens",
+            meta: "tokens"
         };
-        const data = await this.#query(params);
-        
+        const data = await this.#query(params);        
         const raw_token = data.query.tokens.csrftoken
-
         const token = raw_token == "+\\" ? null : raw_token
 
         if (!token) {
@@ -241,6 +251,15 @@ class WapiClient {
     // QUERY
 
     /**
+     * Send request to WAPI browser-extension
+     * @returns {Promise<{json: () => Promise<Object>}>}
+     */
+    async wapiFetch(url, method = 'GET', headers = {}, body = null) {
+        const data = await this.#wapiFetch(url, method, headers, body);
+        return data;
+    }
+
+    /**
      * public SPARQL request method.
      * @param {string} itemId - QID
      * @returns {Promise<Array>} Objects array
@@ -269,6 +288,61 @@ class WapiClient {
         const data = await this.#query(params);
         return data.entities[itemId] || null;
 
+    }
+
+    /**
+     * Get item with formatted "property label: value label" pairs
+     * @param {string} itemId - QID (es: "Q42")
+     * @returns {Promise<Array<{property: string, propertyLabel: string, value: string, valueLabel: string}>>}
+     */
+    async getItemDetails(itemId) {
+        const query = `
+        SELECT DISTINCT ?property ?propertyLabel ?value ?valueLabel WHERE {
+            wd:${itemId} ?propertyUri ?value .
+            
+            BIND(IRI(REPLACE(STR(?propertyUri), "prop/direct/", "entity/")) AS ?property)
+            
+            ?property rdfs:label ?propertyLabel .
+            FILTER(LANG(?propertyLabel) = "it" || LANG(?propertyLabel) = "en")
+            
+            OPTIONAL {
+                ?value rdfs:label ?valueLabel .
+                FILTER(LANG(?valueLabel) = "it" || LANG(?valueLabel) = "en")
+            }
+        }
+        ORDER BY ?propertyLabel
+        LIMIT 100
+        `;
+        
+        try {
+            const results = await this.querySparql(query);
+            results.reverse();
+            return results.map(row => ({
+                property: row.property, // P31
+                propertyLabel: row.propertyLabel?.value || row.property.value.split('/').pop(),
+                value: row.value.value,
+                valueLabel: row.valueLabel?.value || this.#formatValue(row.value.value),
+                raw: row
+            }));
+        } catch (error) {
+            console.error("Errore query key-value labels:", error);
+            return [];
+        }
+    }
+
+    /**
+     * @private
+     * Formatta valori non-labelati
+     */
+    #formatValue(value) {
+        if (value.includes('http://www.wikidata.org/entity/Q')) {
+            return value.split('/').pop(); // Qxxx
+        } else if (value.includes('http://www.wikidata.org/entity/P')) {
+            return value.split('/').pop(); // Pxxx
+        } else {
+            // Rimuovi datatype per valori letterali
+            return value.replace(/^"|"(@.+)?$/g, '').replace(/\\"/g, '"');
+        }
     }
 
     /**
@@ -578,10 +652,10 @@ class WapiClient {
     * @param {string} summary - Edit summary
     * @returns {bool} 
     */
-    async editEntity(itemId, body, summary = null) {
+    async editEntity(itemId, claims, summary = null) {
 
         if (!this.token) {
-            this.token = await this.getAuthToken()
+            this.token = await this.getCsrfToken()
         }
         if (!this.token) {
             throw new Error("Not logged");
@@ -590,21 +664,23 @@ class WapiClient {
         const params = {
             action: "wbeditentity",
             id: itemId,
+            format: "json",
             token: this.token,
-            data: JSON.stringify(body),
+            data: JSON.stringify( {claims : claims}),
             summary: summary
         };
         const formData = new URLSearchParams(params);
         const response = await this.#wapiFetch(
             this.apiURL, 
             'POST', 
-            {'Content-Type': 'application/x-www-form-urlencoded'},
+            {},
             formData.toString()
         );
-        if (response.success === 1) {
+        const jsonResponse = await response.json();
+        if (jsonResponse.success === 1) {
             return true
         } else {
-            console.log(response)
+            console.log(jsonResponse)
             return false
         }
     }
