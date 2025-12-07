@@ -22,7 +22,8 @@ class WapiClient {
         this.token = null;
         this.wapiPort = port;
 
-    
+        this.isPopup = typeof chrome !== 'undefined' && chrome.extension && window.location.protocol === 'chrome-extension:';
+
     }
 
     /**
@@ -32,7 +33,7 @@ class WapiClient {
      */
     async #wapiFetch(url, method = 'GET', headers = {}, body = null) {
         
-        if (this.wapiPort) {
+        if (this.isPopup) {
             return this.#popupFetch(url, method, headers, body); // Browser Extension
         } else {
             return this.#windowFetch(url, method, headers, body); // Web page
