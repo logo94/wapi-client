@@ -11,7 +11,7 @@ class WapiClient {
 
         this.baseURL = baseURL.endsWith('/') ? baseURL.slice(0, -1) : baseURL;
         this.lang = lang;
-        this.apiURL = this.baseURL + WikiClient.API_PATH;
+        this.apiURL = this.baseURL + WapiClient.API_PATH;
 
         if (this.baseURL.includes("wikidata.org") || this.baseURL.includes("query.wikidata.org")) {
             this.sparqlEndpoint = 'https://query.wikidata.org/sparql';
@@ -58,13 +58,14 @@ class WapiClient {
                     return reject(new Error("Runtime error: " + chrome.runtime.lastError.message));
                 }
 
-                if (response.success) {
+                if (response && response.success) {
                     resolve({ 
                         ok: true, 
                         json: () => Promise.resolve(response.data) 
                     });
                 } else {
-                    reject(new Error(response.error || 'Unknown error from WAPI.'));
+                    const errorMsg = response?.error || 'Unknown error from WAPI.';
+                    reject(new Error(errorMsg));
                 }
             });
         });
@@ -146,9 +147,7 @@ class WapiClient {
     */
     async #sparql(sparql_query) {
 
-        const params = {
-            query: sparql_query
-        };
+        const params = new URLSearchParams({ query: sparql_query });
         const url = `${this.sparqlEndpoint}?${params.toString()}`;
         const response = await this.#wapiFetch( 
             url, 
@@ -178,7 +177,7 @@ class WapiClient {
         const response = await this.#wapiFetch(
             url, 
             'POST', 
-            {},
+            {'Content-Type': 'application/x-www-form-urlencoded'},
             new URLSearchParams(defaultParams).toString()
         )
         const data = await response.json()
