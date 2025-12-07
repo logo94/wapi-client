@@ -123,7 +123,11 @@ class WapiClient {
         };
 
         const url = new URL(this.apiURL);
-        url.search = new URLSearchParams(defaultParams).toString();
+        Object.entries(defaultParams).forEach(([key, value]) => {
+            if (value !== undefined && value !== null) {
+                url.searchParams.append(key, value);
+            }
+        });
 
         try {
             const response = await this.#wapiFetch(
@@ -147,17 +151,21 @@ class WapiClient {
     */
     async #sparql(sparql_query) {
 
-        const params = new URLSearchParams({ query: sparql_query });
-        const url = `${this.sparqlEndpoint}?${params.toString()}`;
-        const response = await this.#wapiFetch( 
-            url, 
-            'GET',
-            { 'Accept': 'application/sparql-results+json' },
-            null
-        );
-        const data = await response.json();
-        return data
-
+        try {
+            const params = new URLSearchParams({ query: sparql_query });
+            const url = `${this.sparqlEndpoint}?${params.toString()}`;
+            const response = await this.#wapiFetch( 
+                url, 
+                'GET',
+                { 'Accept': 'application/sparql-results+json' },
+                null
+            );
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error(`Errore SPARQL:`, error);
+            throw error;
+        }
     }
 
     /**
@@ -346,9 +354,9 @@ class WapiClient {
                 uri: ent.concepturi
             }));
             return filterList
-        } else {
-            return []
-        }
+        } 
+        return [];
+        
     }
 
     /**
@@ -585,12 +593,13 @@ class WapiClient {
             data: JSON.stringify(body),
             summary: summary
         };
+        const formData = new URLSearchParams(params);
         const response = await this.#wapiFetch(
             this.apiURL, 
             'POST', 
-            {},
-            params.toString()
-        )
+            {'Content-Type': 'application/x-www-form-urlencoded'},
+            formData.toString()
+        );
         if (response.success === 1) {
             return true
         } else {
